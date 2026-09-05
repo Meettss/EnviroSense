@@ -3,6 +3,8 @@
 #include <Adafruit_SSD1306.h>
 #include "reg_model.h"
 #include "clf_model.h"
+#include "reg_model_v2.h"
+#include "clf_model_v2.h"
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -14,6 +16,8 @@ const int POT_TEMP = 33;
 const int POT_HUMIDITY = 34;
 const int POT_GAS = 35;
 const int LED_PIN = 2;
+bool useV2Model = false;  // set to false to use V1, true to use V2 
+
 // ReLU activation: negative numbers become 0, positive numbers stay the same
 float relu(float x) {
   if (x > 0) {
@@ -79,8 +83,15 @@ void loop() {
   float inputs[3] = {temperature, humidity, gas};
 
   // Run both models
-  float riskIndex = runModel(inputs, reg_model_w0, reg_model_b0, reg_model_w1, reg_model_b1);
-  float anomalyScore = runModel(inputs, clf_model_w0, clf_model_b0, clf_model_w1, clf_model_b1);
+float riskIndex, anomalyScore;
+
+if (useV2Model) {
+  riskIndex = runModel(inputs, reg_model_v2_w0, reg_model_v2_b0, reg_model_v2_w1, reg_model_v2_b1);
+  anomalyScore = runModel(inputs, clf_model_v2_w0, clf_model_v2_b0, clf_model_v2_w1, clf_model_v2_b1);
+} else {
+  riskIndex = runModel(inputs, reg_model_w0, reg_model_b0, reg_model_w1, reg_model_b1);
+  anomalyScore = runModel(inputs, clf_model_w0, clf_model_b0, clf_model_w1, clf_model_b1);
+}
   bool isAnomaly = anomalyScore > 0.5;
 
   Serial.print("Temp: "); Serial.print(temperature);
