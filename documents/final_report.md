@@ -182,8 +182,73 @@ or implementation bug, and a natural direction for future improvement —
 generating anomaly data with a wider variety of sensor combinations.
 
 ---
+## 7. Improvements: Fixing the Out-of-Distribution Limitation
 
-## 7. Conclusion
+Following the initial testing phase, the out-of-distribution limitation 
+described above was addressed directly rather than left as a known issue.
+
+### Root Cause and Fix
+
+Two changes were made to the dataset and model:
+
+1. **Added a second anomaly pattern.** The original synthetic dataset 
+   only generated anomalies as high temperature + high gas + LOW 
+   humidity. A second anomaly pattern was added — high temperature + 
+   high gas + HIGH humidity (representing a different failure mode, 
+   such as condensation) — splitting the 200 anomaly samples evenly 
+   between the two patterns (100 each).
+
+2. **Fixed a risk_index formula bug.** The original regression target 
+   only rewarded *low* humidity as risky (`0.3 * (50 - humidity)`), 
+   which meant the new high-humidity anomalies would incorrectly 
+   receive a *lower* risk score despite being labeled anomalies. This 
+   was corrected to `0.3 * abs(50 - humidity)`, so deviation from 
+   normal humidity in either direction now correctly increases risk.
+
+### Results: v1 vs v2
+
+| Metric | v1 | v2 |
+|---|---|---|
+| Regression MSE | 8.99 | **6.99** (improved) |
+| Classification Accuracy | 99.5% | 98% |
+| Classification Precision | 97.6% | 97.4% |
+| Classification Recall | 100% | 92.5% |
+| Anomaly coverage | 1 pattern | **2 patterns** |
+
+Classification recall decreased slightly (100% → 92.5%), which reflects 
+a genuinely harder classification task — the v2 model must now 
+distinguish two distinct anomaly patterns from normal, rather than one. 
+This is a deliberate and reasonable tradeoff: broader real-world 
+coverage in exchange for a small drop in accuracy on an easier, 
+narrower version of the problem.
+
+### Live Confirmation on Hardware
+
+The fix was verified directly on the Wokwi simulation, not just in 
+Python. A `useV2Model` toggle was added to the embedded sketch, 
+allowing both v1 and v2 model weights to be included and switched 
+between at will. Testing the exact case that originally failed 
+(Temp=60°C, Humidity=100%, Gas=560ppm) on the same hardware setup:
+
+- **v1:** Risk Index 91.70, Anomaly: **NO** (incorrect)
+- **v2:** Risk Index 81.40, Anomaly: **YES** (correct)
+
+This confirms the fix resolves the limitation on the actual deployed 
+model logic, not only in the training environment.
+
+### Additional Deliverables
+
+- **Confusion matrix comparison** (`documents/confusion_matrix_comparison.png`) 
+  — a side-by-side visualization of the v1 and v2 confusion matrices.
+- **Web dashboard** (`wokwi/dashboard.html`) — a standalone HTML/JavaScript 
+  page that reimplements the exact same model forward-pass logic used 
+  on the ESP32, cycling through randomly generated realistic sensor 
+  readings to demonstrate live risk index and anomaly predictions in a 
+  browser, with the same v1/v2 toggle available. This is a client-side 
+  demonstration tool, not a live data connection to the physical/simulated 
+  device.
+
+## 8. Conclusion
 
 EnviroSense demonstrates a complete edge-AI pipeline: synthetic data 
 generation, dual-model training (regression + classification) on 
